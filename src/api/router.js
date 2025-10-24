@@ -3,12 +3,14 @@
 
 const { router } = require('./trpc');
 const userRouter = require('./routers/user');
+const jobsRouter = require('./routers/jobs');
 
 /**
  * Main app router
  */
 const appRouter = router({
   user: userRouter,
+  jobs: jobsRouter,
 });
 
 // Export type router type signature
