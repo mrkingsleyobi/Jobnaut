@@ -1,0 +1,123 @@
+{
+  "name": "Claude Flow Development",
+  "image": "mcr.microsoft.com/devcontainers/base:debian",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {},
+    "ghcr.io/devcontainers/features/python:1": {},
+    "ghcr.io/devcontainers/features/docker-in-docker:2.12.2": {
+      "version": "latest",
+      "moby": true
+    }
+  },
+  "runArgs": [
+    "--privileged"
+  ],
+  "remoteUser": "vscode",
+  "onCreateCommand": "npm install -g claude-flow@alpha && npm install -g @anthropic-ai/claude-code && npm install -g @musistudio/claude-code-router ",
+  "postCreateCommand": "bash -c 'mkdir -p ~/.claude-code-router && cat <<EOF > ~/.claude-code-router/config.json
+{
+  \"LOG\": false,
+  \"API_TIMEOUT_MS\": 7200000,
+  \"NON_INTERACTIVE_MODE\": false,
+  \"transformers\": [],
+  \"Providers\": [
+    {
+      \"name\": \"openrouter\",
+      \"api_base_url\": \"https://openrouter.ai/api/v1/chat/completions\",
+      \"api_key\": \"sk-or-v1-x\",
+      \"models\": [
+        \"moonshotai/kimi-k2:free\",
+        \"openai/gpt-oss-120b:free\",
+        \"deepseek/deepseek-r1-0528\",
+        \"qwen/qwen3-coder:free\"
+      ],
+      \"transformer\": {
+        \"use\": [\"openrouter\", [\"maxtoken\", {\"max_tokens\": 0}]]
+      }
+    },
+    {
+      \"name\": \"iflow\",
+      \"api_base_url\": \"https://apis.iflow.cn/v1/chat/completions\",
+      \"api_key\": \"sk-x\",
+      \"models\": [
+        \"kimi-k2-0905\",
+        \"qwen3-coder\",
+        \"glm-4.6\",
+        \"qwen3-235b-a22b-thinking-2507\",
+        \"deepseek-v3.1\",
+        \"qwen3-vl-plus\",
+        \"qwen3-max\",
+        \"deepseek-v3.2\"
+      ],
+      \"transformer\": {
+        \"qwen3-coder\": {
+          \"use\": [
+            \"enhancetool\"
+          ]
+        },
+        \"deepseek-v3.1\": {
+          \"use\": [
+            [
+              \"maxtoken\",
+              {
+                \"max_tokens\": 8192
+              }
+            ]
+          ]
+        }
+      }
+    }
+  ],
+  \"StatusLine\": {
+    \"enabled\": false,
+    \"currentStyle\": \"default\",
+    \"default\": {
+      \"modules\": []
+    },
+    \"powerline\": {
+      \"modules\": []
+    }
+  },
+  \"Router\": {
+    \"default\": \"iflow,glm-4.6\",
+    \"background\": \"iflow,glm-4.6\",
+    \"think\": \"iflow,glm-4.6\",
+    \"longContext\": \"iflow,qwen3-coder\",
+    \"longContextThreshold\": 25000,
+    \"webSearch\": \"iflow,kimi-k2-0905\"
+  }
+}
+EOF
+&& echo \"✅ Claude Flow project structure and config created\"'",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "kilocode.Kilo-Code",
+        "iganbold.superdesign",
+        "vsls-contrib.gistfs",
+        "ms-python.python",
+        "ms-python.debugpy",
+        "ms-python.vscode-pylance",
+        "github.copilot",
+        "github.copilot-chat"
+      ],
+      "settings": {
+        "terminal.integrated.cwd": "${workspaceFolder}",
+        "files.exclude": {
+          "**/node_modules": true,
+          "**/.git": false,
+        },
+        "search.exclude": {
+          "**/node_modules": true,
+        },
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.fixAll": "explicit"
+        }
+      }
+    }
+  },
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind",
+  "shutdownAction": "none"
+}
