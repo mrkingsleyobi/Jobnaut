@@ -1,0 +1,55 @@
+// Prisma schema for JobNaut
+// Based on the technical implementation plan
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Users table
+model User {
+  id              Int       @id @default(autoincrement())
+  clerkId         String    @unique
+  email           String    @unique
+  name            String?
+  location        String?
+  experienceLevel String?
+  skills          Json?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  savedJobs       SavedJob[]
+}
+
+// Jobs table
+model Job {
+  id              Int       @id @default(autoincrement())
+  title           String
+  company         String
+  location        String
+  description     String
+  skills          Json
+  postedDate      DateTime
+  applicationLink String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  savedBy         SavedJob[]
+}
+
+// Saved jobs table
+model SavedJob {
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  jobId           Int
+  notes           String?
+  applicationStatus String?
+  savedAt         DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id])
+  job             Job      @relation(fields: [jobId], references: [id])
+
+  @@unique([userId, jobId])
+}
