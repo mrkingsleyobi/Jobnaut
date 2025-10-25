@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "JobNaut Frontend - Nuxt 3 Application",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "dev": "nuxt dev",
     "build": "nuxt build",

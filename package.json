@@ -13,6 +13,8 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:job": "NODE_ENV=test env-cmd -f .env.test jest --testNamePattern='Job'",
+    "chatbot:dev": "node scripts/chatbot-test-server.js",
+    "chatbot:test": "node scripts/test-chat.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio"
