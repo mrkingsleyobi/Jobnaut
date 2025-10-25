@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  database:
+    image: postgres:15-alpine
+    container_name: jobnaut-db-prod
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Backend API Service
+  backend:
+    image: jobnaut/backend:latest
+    container_name: jobnaut-backend-prod
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@database:5432/${DB_NAME}
+      - NODE_ENV=production
+      - PORT=3000
+      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Frontend Service
+  frontend:
+    image: jobnaut/frontend:latest
+    container_name: jobnaut-frontend-prod
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=production
+      - API_BASE_URL=http://backend:3000
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # Meilisearch Service
+  meilisearch:
+    image: getmeili/meilisearch:v1.13
+    container_name: jobnaut-meilisearch-prod
+    ports:
+      - "7700:7700"
+    environment:
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
+      - MEILI_ENV=production
+    volumes:
+      - meilisearch_data:/meili_data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  meilisearch_data:
