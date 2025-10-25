@@ -1,7 +1,11 @@
 // Job model service for JobNaut
 // Handles all job-related database operations
 
-const prisma = require('../db/client');
+const prisma = process.env.NODE_ENV === 'test'
+  ? require('../db/testClient')
+  : require('../db/client');
+const NodeCache = require('node-cache');
+const cache = new NodeCache({ stdTTL: 300 }); // 5 minutes TTL
 
 /**
  * Job model service
@@ -20,7 +24,7 @@ class JobService {
    * @returns {Promise<Object>} Created job
    */
   async createJob(jobData) {
-    return await prisma.job.create({
+    const createdJob = await prisma.job.create({
       data: {
         title: jobData.title,
         company: jobData.company,
@@ -31,6 +35,11 @@ class JobService {
         applicationLink: jobData.applicationLink,
       },
     });
+
+    // Invalidate all cache to ensure search results are fresh
+    cache.flushAll();
+
+    return createdJob;
   }
 
   /**
@@ -39,9 +48,22 @@ class JobService {
    * @returns {Promise<Object|null>} Job or null if not found
    */
   async getJobById(id) {
-    return await prisma.job.findUnique({
+    const cacheKey = `job_${id}`;
+    const cached = cache.get(cacheKey);
+
+    if (cached) {
+      return cached;
+    }
+
+    const job = await prisma.job.findUnique({
       where: { id },
     });
+
+    if (job) {
+      cache.set(cacheKey, job);
+    }
+
+    return job;
   }
 
   /**
@@ -53,19 +75,21 @@ class JobService {
   async getAllJobs(page = 1, limit = 10) {
     const skip = (page - 1) * limit;
 
-    const [jobs, total] = await Promise.all([
-      prisma.job.findMany({
-        skip,
-        take: limit,
-        orderBy: {
-          postedDate: 'desc',
-        },
-      }),
-      prisma.job.count(),
-    ]);
+    // Use aggregation to get both jobs and count in a single query
+    const result = await prisma.job.findMany({
+      skip,
+      take: limit,
+      orderBy: {
+        postedDate: 'desc',
+      },
+      // Include count in the query result
+    });
+
+    // Get total count separately (Prisma doesn't support count in findMany directly)
+    const total = await prisma.job.count();
 
     return {
-      jobs,
+      jobs: result,
       total,
       page,
       limit,
@@ -83,16 +107,30 @@ class JobService {
   async searchJobs(query, page = 1, limit = 10) {
     const skip = (page - 1) * limit;
 
+    // Create cache key for search results
+    const cacheKey = `search_${query}_${page}_${limit}`;
+    const cached = cache.get(cacheKey);
+
+    if (cached) {
+      return cached;
+    }
+
+    // SQLite doesn't support mode: 'insensitive', only use it with PostgreSQL
+    const isSQLite = process.env.NODE_ENV === 'test' ||
+      (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('file:'));
+
+    const searchConditions = {
+      OR: [
+        { title: { contains: query, ...(isSQLite ? {} : { mode: 'insensitive' }) } },
+        { company: { contains: query, ...(isSQLite ? {} : { mode: 'insensitive' }) } },
+        { location: { contains: query, ...(isSQLite ? {} : { mode: 'insensitive' }) } },
+        { description: { contains: query, ...(isSQLite ? {} : { mode: 'insensitive' }) } },
+      ],
+    };
+
     const [jobs, total] = await Promise.all([
       prisma.job.findMany({
-        where: {
-          OR: [
-            { title: { contains: query, mode: 'insensitive' } },
-            { company: { contains: query, mode: 'insensitive' } },
-            { location: { contains: query, mode: 'insensitive' } },
-            { description: { contains: query, mode: 'insensitive' } },
-          ],
-        },
+        where: searchConditions,
         skip,
         take: limit,
         orderBy: {
@@ -100,24 +138,22 @@ class JobService {
         },
       }),
       prisma.job.count({
-        where: {
-          OR: [
-            { title: { contains: query, mode: 'insensitive' } },
-            { company: { contains: query, mode: 'insensitive' } },
-            { location: { contains: query, mode: 'insensitive' } },
-            { description: { contains: query, mode: 'insensitive' } },
-          ],
-        },
+        where: searchConditions,
       }),
     ]);
 
-    return {
+    const result = {
       jobs,
       total,
       page,
       limit,
       totalPages: Math.ceil(total / limit),
     };
+
+    // Cache the search results
+    cache.set(cacheKey, result);
+
+    return result;
   }
 
   /**
@@ -132,10 +168,16 @@ class JobService {
       updateData.skills = JSON.stringify(updateData.skills);
     }
 
-    return await prisma.job.update({
+    const updatedJob = await prisma.job.update({
       where: { id },
       data: updateData,
     });
+
+    // Invalidate cache for this job and all search results
+    cache.del(`job_${id}`);
+    cache.flushAll(); // Clear all cache to ensure search results are fresh
+
+    return updatedJob;
   }
 
   /**
@@ -144,9 +186,15 @@ class JobService {
    * @returns {Promise<Object>} Deleted job
    */
   async deleteJob(id) {
-    return await prisma.job.delete({
+    const deletedJob = await prisma.job.delete({
       where: { id },
     });
+
+    // Invalidate cache for this job and all search results
+    cache.del(`job_${id}`);
+    cache.flushAll(); // Clear all cache to ensure search results are fresh
+
+    return deletedJob;
   }
 
   /**

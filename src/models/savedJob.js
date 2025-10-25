@@ -1,7 +1,11 @@
 // Saved Job model service for JobNaut
 // Handles all saved job-related database operations
 
-const prisma = require('../db/client');
+const prisma = process.env.NODE_ENV === 'test'
+  ? require('../db/testClient')
+  : require('../db/client');
+const NodeCache = require('node-cache');
+const savedJobCache = new NodeCache({ stdTTL: 300 }); // 5 minutes TTL
 
 /**
  * Saved Job model service
@@ -17,7 +21,7 @@ class SavedJobService {
    * @returns {Promise<Object>} Created saved job
    */
   async saveJob(savedJobData) {
-    return await prisma.savedJob.create({
+    const createdSavedJob = await prisma.savedJob.create({
       data: {
         userId: savedJobData.userId,
         jobId: savedJobData.jobId,
@@ -25,6 +29,11 @@ class SavedJobService {
         applicationStatus: savedJobData.applicationStatus,
       },
     });
+
+    // Invalidate cache for user's saved jobs to ensure consistency
+    savedJobCache.del(`saved_jobs_${savedJobData.userId}`);
+
+    return createdSavedJob;
   }
 
   /**
@@ -33,12 +42,23 @@ class SavedJobService {
    * @returns {Promise<Array>} Array of saved jobs
    */
   async getSavedJobsByUser(userId) {
-    return await prisma.savedJob.findMany({
+    const cacheKey = `saved_jobs_${userId}`;
+    const cached = savedJobCache.get(cacheKey);
+
+    if (cached) {
+      return cached;
+    }
+
+    const savedJobs = await prisma.savedJob.findMany({
       where: { userId },
       include: {
         job: true, // Include job details
       },
     });
+
+    // Cache the saved jobs
+    savedJobCache.set(cacheKey, savedJobs);
+    return savedJobs;
   }
 
   /**
@@ -48,7 +68,14 @@ class SavedJobService {
    * @returns {Promise<Object|null>} Saved job or null if not found
    */
   async getSavedJob(userId, jobId) {
-    return await prisma.savedJob.findUnique({
+    const cacheKey = `saved_job_${userId}_${jobId}`;
+    const cached = savedJobCache.get(cacheKey);
+
+    if (cached) {
+      return cached;
+    }
+
+    const savedJob = await prisma.savedJob.findUnique({
       where: {
         userId_jobId: {
           userId,
@@ -59,6 +86,12 @@ class SavedJobService {
         job: true,
       },
     });
+
+    // Cache the saved job
+    if (savedJob) {
+      savedJobCache.set(cacheKey, savedJob);
+    }
+    return savedJob;
   }
 
   /**
@@ -69,7 +102,7 @@ class SavedJobService {
    * @returns {Promise<Object>} Updated saved job
    */
   async updateSavedJob(userId, jobId, updateData) {
-    return await prisma.savedJob.update({
+    const updatedSavedJob = await prisma.savedJob.update({
       where: {
         userId_jobId: {
           userId,
@@ -78,6 +111,12 @@ class SavedJobService {
       },
       data: updateData,
     });
+
+    // Invalidate cache for this saved job and user's saved jobs
+    savedJobCache.del(`saved_job_${userId}_${jobId}`);
+    savedJobCache.del(`saved_jobs_${userId}`);
+
+    return updatedSavedJob;
   }
 
   /**
@@ -87,7 +126,7 @@ class SavedJobService {
    * @returns {Promise<Object>} Deleted saved job
    */
   async deleteSavedJob(userId, jobId) {
-    return await prisma.savedJob.delete({
+    const deletedSavedJob = await prisma.savedJob.delete({
       where: {
         userId_jobId: {
           userId,
@@ -95,6 +134,12 @@ class SavedJobService {
         },
       },
     });
+
+    // Invalidate cache for this saved job and user's saved jobs
+    savedJobCache.del(`saved_job_${userId}_${jobId}`);
+    savedJobCache.del(`saved_jobs_${userId}`);
+
+    return deletedSavedJob;
   }
 }
 

@@ -10,6 +10,35 @@ const mockPrisma = {
 };
 
 jest.mock('../../src/db/client', () => mockPrisma);
+jest.mock('../../src/db/testClient', () => mockPrisma);
+
+// Mock User Service to test the actual clerk service implementation
+jest.mock('../../src/models/user', () => {
+  return {
+    getUserByClerkId: jest.fn(),
+    createUser: jest.fn()
+  };
+});
+
+// Mock encryption service
+jest.mock('../../src/services/encryption', () => {
+  return {
+    encryptUserData: jest.fn((userData) => {
+      // Return the user data as-is for testing purposes
+      return {
+        ...userData,
+        name: userData.name || null,
+        location: userData.location || null,
+        experienceLevel: userData.experienceLevel || null,
+        skills: userData.skills || null
+      };
+    }),
+    decrypt: jest.fn((encryptedData) => {
+      // For testing, return the data as-is
+      return encryptedData;
+    })
+  };
+});
 
 // Mock Clerk SDK
 const mockSessionAPI = {
@@ -87,64 +116,54 @@ describe('Clerk Authentication Service', () => {
   describe('syncUserWithDatabase', () => {
     it('should return existing user if already in database', async () => {
       // Arrange
-      mockPrisma.user.findUnique.mockImplementation(() => Promise.resolve(mockLocalUser));
+      userService.getUserByClerkId.mockImplementation(() => Promise.resolve(mockLocalUser));
 
       // Act
       const result = await clerkAuthService.syncUserWithDatabase(mockClerkUser);
 
       // Assert
-      expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
-        where: { clerkId: 'user_123' }
-      });
-      expect(mockPrisma.user.create).not.toHaveBeenCalled();
+      expect(userService.getUserByClerkId).toHaveBeenCalledWith('user_123');
+      expect(userService.createUser).not.toHaveBeenCalled();
       expect(result).toEqual(mockLocalUser);
     });
 
     it('should create new user if not in database', async () => {
       // Arrange
-      mockPrisma.user.findUnique.mockImplementation(() => Promise.resolve(null));
-      mockPrisma.user.create.mockImplementation(() => Promise.resolve(mockLocalUser));
+      userService.getUserByClerkId.mockImplementation(() => Promise.resolve(null));
+      userService.createUser.mockImplementation(() => Promise.resolve(mockLocalUser));
 
       // Act
       const result = await clerkAuthService.syncUserWithDatabase(mockClerkUser);
 
       // Assert
-      expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
-        where: { clerkId: 'user_123' }
-      });
-      expect(mockPrisma.user.create).toHaveBeenCalledWith({
-        data: {
-          clerkId: 'user_123',
-          email: 'test@example.com',
-          name: 'Test User',
-          location: undefined,
-          experienceLevel: undefined,
-          skills: null
-        }
+      expect(userService.getUserByClerkId).toHaveBeenCalledWith('user_123');
+      expect(userService.createUser).toHaveBeenCalledWith({
+        clerkId: 'user_123',
+        email: 'test@example.com',
+        name: 'Test User',
+        location: undefined,
+        experienceLevel: undefined,
+        skills: undefined
       });
       expect(result).toEqual(mockLocalUser);
     });
 
     it('should handle database errors when creating user', async () => {
       // Arrange
-      mockPrisma.user.findUnique.mockImplementation(() => Promise.resolve(null));
+      userService.getUserByClerkId.mockImplementation(() => Promise.resolve(null));
       const error = new Error('Database error');
-      mockPrisma.user.create.mockImplementation(() => Promise.reject(error));
+      userService.createUser.mockImplementation(() => Promise.reject(error));
 
       // Act & Assert
       await expect(clerkAuthService.syncUserWithDatabase(mockClerkUser)).rejects.toThrow('Database error');
-      expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
-        where: { clerkId: 'user_123' }
-      });
-      expect(mockPrisma.user.create).toHaveBeenCalledWith({
-        data: {
-          clerkId: 'user_123',
-          email: 'test@example.com',
-          name: 'Test User',
-          location: undefined,
-          experienceLevel: undefined,
-          skills: null
-        }
+      expect(userService.getUserByClerkId).toHaveBeenCalledWith('user_123');
+      expect(userService.createUser).toHaveBeenCalledWith({
+        clerkId: 'user_123',
+        email: 'test@example.com',
+        name: 'Test User',
+        location: undefined,
+        experienceLevel: undefined,
+        skills: undefined
       });
     });
   });
@@ -186,7 +205,7 @@ describe('Clerk Authentication Service', () => {
       const mockSession = { userId: 'user_123', status: 'active' };
       mockSessionAPI.verifySessionToken.mockImplementation(() => Promise.resolve(mockSession));
       mockUserAPI.getUser.mockImplementation(() => Promise.resolve(mockClerkUser));
-      mockPrisma.user.findUnique.mockImplementation(() => Promise.resolve(mockLocalUser));
+      userService.getUserByClerkId.mockImplementation(() => Promise.resolve(mockLocalUser));
 
       // Act
       const result = await clerkAuthService.getUserBySession(sessionToken);
@@ -194,9 +213,7 @@ describe('Clerk Authentication Service', () => {
       // Assert
       expect(mockSessionAPI.verifySessionToken).toHaveBeenCalledWith(sessionToken);
       expect(mockUserAPI.getUser).toHaveBeenCalledWith('user_123');
-      expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
-        where: { clerkId: 'user_123' }
-      });
+      expect(userService.getUserByClerkId).toHaveBeenCalledWith('user_123');
       expect(result).toEqual({
         ...mockLocalUser,
         clerkUser: mockClerkUser
@@ -238,7 +255,7 @@ describe('Clerk Authentication Service', () => {
       mockSessionAPI.verifySessionToken.mockImplementation(() => Promise.resolve(mockSession));
       mockUserAPI.getUser.mockImplementation(() => Promise.resolve(mockClerkUser));
       const error = new Error('Database error');
-      mockPrisma.user.findUnique.mockImplementation(() => Promise.reject(error));
+      userService.getUserByClerkId.mockImplementation(() => Promise.reject(error));
 
       // Act
       const result = await clerkAuthService.getUserBySession(sessionToken);

@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  database:
+    image: postgres:15-alpine
+    container_name: jobnaut-db
+    environment:
+      POSTGRES_USER: jobnaut_user
+      POSTGRES_PASSWORD: jobnaut_password
+      POSTGRES_DB: jobnaut_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobnaut_user -d jobnaut_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API Service
+  backend:
+    build: .
+    container_name: jobnaut-backend
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://jobnaut_user:jobnaut_password@database:5432/jobnaut_dev
+      - NODE_ENV=development
+      - PORT=3000
+      - CLERK_SECRET_KEY=your_clerk_secret_key
+      - ENCRYPTION_KEY=jobnaut_secure_encryption_key_for_development_environment_32bytes!
+    depends_on:
+      database:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: npm run dev
+
+  # Frontend Service
+  frontend:
+    build: ./frontend
+    container_name: jobnaut-frontend
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=development
+      - API_BASE_URL=http://backend:3000
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm run dev
+
+  # Meilisearch Service
+  meilisearch:
+    image: getmeili/meilisearch:v1.13
+    container_name: jobnaut-meilisearch
+    ports:
+      - "7700:7700"
+    environment:
+      - MEILI_MASTER_KEY=jobnaut_meilisearch_master_key
+      - MEILI_ENV=development
+    volumes:
+      - meilisearch_data:/meili_data
+
+volumes:
+  postgres_data:
+  meilisearch_data:

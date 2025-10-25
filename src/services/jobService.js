@@ -102,6 +102,23 @@ class JobService {
   }
 
   /**
+   * Batch extract skills from multiple job descriptions
+   * @param {Array<string>} descriptions - Array of job descriptions
+   * @returns {Promise<Array<Array>>} Array of skill arrays for each description
+   */
+  async batchExtractSkills(descriptions) {
+    try {
+      // In a real implementation, this would call the Python NLP service with batch data
+      // For now, we'll return mock skills for each description
+      return descriptions.map(() => ['JavaScript', 'React', 'Node.js', 'Python']);
+    } catch (error) {
+      console.error('Error batch extracting skills with NLP:', error.message);
+      // Return empty arrays if NLP processing fails
+      return descriptions.map(() => []);
+    }
+  }
+
+  /**
    * Process and store jobs in database
    * @param {Array} rawJobs - Raw jobs from JSearch API
    * @returns {Promise<Array>} Array of processed jobs

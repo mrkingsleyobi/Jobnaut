@@ -2,7 +2,7 @@
 // Test suite for User model operations
 
 // Mock Prisma Client FIRST before any imports
-jest.mock('../../src/db/client', () => {
+jest.mock('../../src/db/testClient', () => {
   const mockPrisma = {
     user: {
       create: jest.fn(),
@@ -14,7 +14,46 @@ jest.mock('../../src/db/client', () => {
   return mockPrisma;
 });
 
-const prisma = require('../../src/db/client');
+// Mock encryption service to return predictable values
+jest.mock('../../src/services/encryption', () => {
+  return {
+    encryptUserData: jest.fn((userData) => {
+      // Return the user data as-is for testing purposes
+      const encryptedData = { ...userData };
+
+      // For fields that would be encrypted, return the plain value
+      // But in test mode, we need to return strings to match Prisma schema
+      if (userData.name) {
+        encryptedData.name = userData.name;
+      }
+      if (userData.location) {
+        encryptedData.location = userData.location;
+      }
+      if (userData.experienceLevel) {
+        encryptedData.experienceLevel = userData.experienceLevel;
+      }
+      // For skills, return the array as-is (not JSON stringified) since the user model will handle JSON.stringify
+      if (userData.skills) {
+        encryptedData.skills = userData.skills;
+      }
+
+      return encryptedData;
+    }),
+    decrypt: jest.fn((encryptedData) => {
+      // For testing, return the data as-is
+      // In real implementation, this would decrypt encrypted data objects
+      // But for testing, we just return the skills as-is since our mock
+      // already has them in the correct format
+      // If it's an array, return it as-is, don't convert to object
+      if (Array.isArray(encryptedData)) {
+        return encryptedData;
+      }
+      return encryptedData;
+    })
+  };
+});
+
+const prisma = require('../../src/db/testClient');
 const userService = require('../../src/models/user');
 
 describe('User Model', () => {
@@ -28,7 +67,7 @@ describe('User Model', () => {
       name: 'Test User',
       location: 'New York',
       experienceLevel: 'mid',
-      skills: JSON.stringify(['JavaScript', 'Node.js']),
+      skills: ['JavaScript', 'Node.js'],
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -62,7 +101,7 @@ describe('User Model', () => {
           name: userData.name,
           location: userData.location,
           experienceLevel: userData.experienceLevel,
-          skills: JSON.stringify(userData.skills),
+          skills: '["JavaScript","Node.js"]',
         }
       });
       expect(result).toEqual(mockUser);
@@ -128,7 +167,7 @@ describe('User Model', () => {
       prisma.user.findUnique.mockRejectedValue(error);
 
       // Act & Assert
-      await expect(userService.getUserById(1)).rejects.toThrow('Database connection error');
+      await expect(userService.getUserById(999)).rejects.toThrow('Database connection error');
     });
   });
 
@@ -212,7 +251,7 @@ describe('User Model', () => {
         skills: ['JavaScript', 'React', 'Node.js']
       };
 
-      const updatedUser = { ...mockUser, skills: JSON.stringify(updateData.skills) };
+      const updatedUser = { ...mockUser, skills: ['JavaScript', 'React', 'Node.js'] };
       prisma.user.update.mockResolvedValue(updatedUser);
 
       // Act
