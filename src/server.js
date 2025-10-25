@@ -1,5 +1,8 @@
 // Server startup file for JobNaut application
 
+// Load environment variables first
+require('dotenv').config();
+
 const app = require('./index');
 const envConfig = require('../config/env');
 

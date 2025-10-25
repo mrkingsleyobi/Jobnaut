@@ -181,16 +181,11 @@ describe('User Profile Management Routes', () => {
         skills: 'not_an_array'
       };
 
-      const error = new Error('Skills must be an array');
-
       // Setup test environment with auth middleware
-      const { userProfileService, app } = setupTestEnvironment((req, res, next) => {
+      const { app } = setupTestEnvironment((req, res, next) => {
         req.user = { id: 1 };
         next();
       });
-
-      // Apply mock return values
-      userProfileService.updateProfile.mockRejectedValue(error);
 
       // Act
       const response = await request(app)
@@ -200,9 +195,11 @@ describe('User Profile Management Routes', () => {
 
       // Assert
       expect(response.status).toBe(400);
-      expect(response.body).toEqual({
-        error: 'Skills must be an array'
-      });
+      expect(response.body).toHaveProperty('errors');
+      expect(Array.isArray(response.body.errors)).toBe(true);
+      expect(response.body.errors[0]).toHaveProperty('msg');
+      expect(response.body.errors[0]).toHaveProperty('path');
+      expect(response.body.errors[0].path).toBe('skills');
     });
 
     it('should return 401 for missing authorization header', async () => {
@@ -340,9 +337,11 @@ describe('User Profile Management Routes', () => {
 
       // Assert
       expect(response.status).toBe(400);
-      expect(response.body).toEqual({
-        error: 'Skills must be an array'
-      });
+      expect(response.body).toHaveProperty('errors');
+      expect(Array.isArray(response.body.errors)).toBe(true);
+      expect(response.body.errors[0]).toHaveProperty('msg');
+      expect(response.body.errors[0]).toHaveProperty('path');
+      expect(response.body.errors[0].path).toBe('skills');
     });
 
     it('should return 401 for missing authorization header', async () => {
@@ -480,9 +479,11 @@ describe('User Profile Management Routes', () => {
 
       // Assert
       expect(response.status).toBe(400);
-      expect(response.body).toEqual({
-        error: 'Skills must be an array'
-      });
+      expect(response.body).toHaveProperty('errors');
+      expect(Array.isArray(response.body.errors)).toBe(true);
+      expect(response.body.errors[0]).toHaveProperty('msg');
+      expect(response.body.errors[0]).toHaveProperty('path');
+      expect(response.body.errors[0].path).toBe('skills');
     });
 
     it('should return 401 for missing authorization header', async () => {

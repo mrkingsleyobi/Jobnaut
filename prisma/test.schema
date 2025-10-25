@@ -1,0 +1,62 @@
+// Prisma schema for JobNaut testing with SQLite
+// Based on the technical implementation plan
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./test.db"
+}
+
+// Users table
+model User {
+  id              Int       @id @default(autoincrement())
+  clerkId         String    @unique
+  email           String    @unique
+  name            String?
+  location        String?
+  experienceLevel String?
+  skills          String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  savedJobs       SavedJob[]
+}
+
+// Jobs table
+model Job {
+  id              Int       @id @default(autoincrement())
+  title           String
+  company         String
+  location        String
+  description     String
+  skills          String
+  postedDate      DateTime
+  applicationLink String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  savedBy         SavedJob[]
+
+  // Add indexes for frequently queried fields
+  @@index([title])
+  @@index([company])
+  @@index([location])
+  @@index([postedDate])
+  @@index([title, company, location])
+}
+
+// Saved jobs table
+model SavedJob {
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  jobId           Int
+  notes           String?
+  applicationStatus String?
+  savedAt         DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id])
+  job             Job      @relation(fields: [jobId], references: [id])
+
+  @@unique([userId, jobId])
+}

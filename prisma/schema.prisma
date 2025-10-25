@@ -37,6 +37,15 @@ model Job {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   savedBy         SavedJob[]
+
+  // Add indexes for frequently queried fields
+  @@index([title])
+  @@index([company])
+  @@index([location])
+  @@index([postedDate])
+  @@index([title, company, location])
+  @@index([description])
+  @@index([skills])
 }
 
 // Saved jobs table
@@ -52,4 +61,7 @@ model SavedJob {
   job             Job      @relation(fields: [jobId], references: [id])
 
   @@unique([userId, jobId])
+  @@index([userId])
+  @@index([jobId])
+  @@index([savedAt])
 }

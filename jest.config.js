@@ -14,6 +14,13 @@ module.exports = {
     '**/?(*.)+(spec|test).js'
   ],
 
+  // Exclude frontend tests that use Vitest syntax
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/dist/',
+    '/frontend/tests/'
+  ],
+
   // A map from regular expressions to paths to transformers
   transform: {},
 
@@ -93,12 +100,6 @@ module.exports = {
 
   // A map from regular expressions to module names or to arrays of module names that allow to stub out resources with a single module
   modulePaths: [],
-
-  // An array of regexp pattern strings that are matched against all test paths, matched tests are skipped
-  testPathIgnorePatterns: [
-    '/node_modules/',
-    '/dist/'
-  ],
 
   // This option allows the use of a custom results processor
   testResultsProcessor: null,

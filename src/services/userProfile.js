@@ -2,6 +2,7 @@
 // Handles user profile CRUD operations and management
 
 const userService = require('../models/user');
+const securityLogger = require('./securityLogger');
 
 /**
  * User Profile Management Service
@@ -13,23 +14,32 @@ class UserProfileService {
    * @returns {Promise<Object>} User profile data
    */
   async getProfile(userId) {
+    // Log data access event
+    securityLogger.logDataAccess('user_profile', {
+      userId: userId,
+      action: 'read'
+    });
+
     const user = await userService.getUserById(userId);
 
     if (!user) {
+      // Log failed access attempt
+      securityLogger.logAccessControl('user_profile', 'read', {
+        userId: userId,
+        allowed: false,
+        reason: 'User not found'
+      });
       throw new Error('User not found');
     }
 
-    // Parse skills JSON if it exists
-    let skills = [];
-    if (user.skills) {
-      try {
-        skills = JSON.parse(user.skills);
-      } catch (error) {
-        console.warn('Failed to parse user skills:', error);
-        skills = [];
-      }
-    }
+    // Log successful access
+    securityLogger.logAccessControl('user_profile', 'read', {
+      userId: userId,
+      targetUserId: user.id,
+      allowed: true
+    });
 
+    // The user service now handles decryption, so we can return the user directly
     return {
       id: user.id,
       clerkId: user.clerkId,
@@ -37,7 +47,7 @@ class UserProfileService {
       name: user.name,
       location: user.location,
       experienceLevel: user.experienceLevel,
-      skills: skills,
+      skills: user.skills || [],
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
@@ -50,6 +60,13 @@ class UserProfileService {
    * @returns {Promise<Object>} Updated user profile
    */
   async updateProfile(userId, profileData) {
+    // Log data access event
+    securityLogger.logDataAccess('user_profile', {
+      userId: userId,
+      action: 'update',
+      fields: Object.keys(profileData)
+    });
+
     // Validate and sanitize input data
     const updateData = {};
 
@@ -70,34 +87,47 @@ class UserProfileService {
       if (Array.isArray(profileData.skills)) {
         updateData.skills = profileData.skills;
       } else {
+        securityLogger.logSuspiciousActivity('invalid_input', {
+          userId: userId,
+          field: 'skills',
+          reason: 'Skills must be an array',
+          providedType: typeof profileData.skills
+        });
         throw new Error('Skills must be an array');
       }
     }
 
-    const updatedUser = await userService.updateUser(userId, updateData);
+    try {
+      const updatedUser = await userService.updateUser(userId, updateData);
 
-    // Parse skills JSON for response
-    let skills = [];
-    if (updatedUser.skills) {
-      try {
-        skills = JSON.parse(updatedUser.skills);
-      } catch (error) {
-        console.warn('Failed to parse user skills:', error);
-        skills = [];
-      }
+      // Log successful update
+      securityLogger.logAccessControl('user_profile', 'update', {
+        userId: userId,
+        targetUserId: updatedUser.id,
+        allowed: true,
+        fields: Object.keys(updateData)
+      });
+
+      return {
+        id: updatedUser.id,
+        clerkId: updatedUser.clerkId,
+        email: updatedUser.email,
+        name: updatedUser.name,
+        location: updatedUser.location,
+        experienceLevel: updatedUser.experienceLevel,
+        skills: updatedUser.skills || [],
+        createdAt: updatedUser.createdAt,
+        updatedAt: updatedUser.updatedAt,
+      };
+    } catch (error) {
+      // Log failed update attempt
+      securityLogger.logAccessControl('user_profile', 'update', {
+        userId: userId,
+        allowed: false,
+        reason: error.message
+      });
+      throw error;
     }
-
-    return {
-      id: updatedUser.id,
-      clerkId: updatedUser.clerkId,
-      email: updatedUser.email,
-      name: updatedUser.name,
-      location: updatedUser.location,
-      experienceLevel: updatedUser.experienceLevel,
-      skills: skills,
-      createdAt: updatedUser.createdAt,
-      updatedAt: updatedUser.updatedAt,
-    };
   }
 
   /**
@@ -107,30 +137,39 @@ class UserProfileService {
    * @returns {Promise<Object>} Updated user profile
    */
   async addSkills(userId, newSkills) {
+    // Log data access event
+    securityLogger.logDataAccess('user_skills', {
+      userId: userId,
+      action: 'add',
+      skillsCount: newSkills ? newSkills.length : 0
+    });
+
     // Get current user profile
     const currentUser = await userService.getUserById(userId);
 
     if (!currentUser) {
+      securityLogger.logAccessControl('user_skills', 'add', {
+        userId: userId,
+        allowed: false,
+        reason: 'User not found'
+      });
       throw new Error('User not found');
     }
 
-    // Parse existing skills
-    let existingSkills = [];
-    if (currentUser.skills) {
-      try {
-        existingSkills = JSON.parse(currentUser.skills);
-      } catch (error) {
-        console.warn('Failed to parse existing user skills:', error);
-        existingSkills = [];
-      }
-    }
-
     // Merge and deduplicate skills
-    const allSkills = [...new Set([...existingSkills, ...newSkills])];
+    const allSkills = [...new Set([...(currentUser.skills || []), ...newSkills])];
 
     // Update user with new skills
     const updatedUser = await userService.updateUser(userId, {
       skills: allSkills,
+    });
+
+    // Log successful update
+    securityLogger.logAccessControl('user_skills', 'add', {
+      userId: userId,
+      targetUserId: updatedUser.id,
+      allowed: true,
+      skillsCount: allSkills.length
     });
 
     return {
@@ -153,32 +192,41 @@ class UserProfileService {
    * @returns {Promise<Object>} Updated user profile
    */
   async removeSkills(userId, skillsToRemove) {
+    // Log data access event
+    securityLogger.logDataAccess('user_skills', {
+      userId: userId,
+      action: 'remove',
+      skillsCount: skillsToRemove ? skillsToRemove.length : 0
+    });
+
     // Get current user profile
     const currentUser = await userService.getUserById(userId);
 
     if (!currentUser) {
+      securityLogger.logAccessControl('user_skills', 'remove', {
+        userId: userId,
+        allowed: false,
+        reason: 'User not found'
+      });
       throw new Error('User not found');
     }
 
-    // Parse existing skills
-    let existingSkills = [];
-    if (currentUser.skills) {
-      try {
-        existingSkills = JSON.parse(currentUser.skills);
-      } catch (error) {
-        console.warn('Failed to parse existing user skills:', error);
-        existingSkills = [];
-      }
-    }
-
     // Remove specified skills
-    const updatedSkills = existingSkills.filter(
+    const updatedSkills = (currentUser.skills || []).filter(
       skill => !skillsToRemove.includes(skill)
     );
 
     // Update user with new skills
     const updatedUser = await userService.updateUser(userId, {
       skills: updatedSkills,
+    });
+
+    // Log successful update
+    securityLogger.logAccessControl('user_skills', 'remove', {
+      userId: userId,
+      targetUserId: updatedUser.id,
+      allowed: true,
+      skillsCount: updatedSkills.length
     });
 
     return {

@@ -52,12 +52,8 @@ class ClerkAuthService {
    */
   async validateSession(sessionToken) {
     try {
-      // Check if the clerk client has the verifySessionToken method directly
-      // or if it's under sessions namespace
-      if (typeof clerk.verifySessionToken === 'function') {
-        const session = await clerk.verifySessionToken(sessionToken);
-        return session;
-      } else if (clerk.sessions && typeof clerk.sessions.verifySessionToken === 'function') {
+      // Use the verifyToken method available in the Clerk client sessions API
+      if (typeof clerk.sessions.verifySessionToken === 'function') {
         const session = await clerk.sessions.verifySessionToken(sessionToken);
         return session;
       } else {
